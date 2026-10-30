@@ -1,147 +1,478 @@
 
--- DuyBao Kaitun v1.1
--- Original framework
+--========================================
+-- DUYBAO KAITUN v1.4
+-- Dashboard + Module Manager
+--========================================
 
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
 
-getgenv().Configs = getgenv().Configs or {
-    ["Quest"] = {
-        ["Evo Race V1"] = true,
-        ["Evo Race V2"] = true,
-        ["RGB Haki"] = true,
-        ["Pull Lever"] = true
+local ENV = getgenv and getgenv() or _G
+
+if ENV.DuyBaoKaitun then
+    pcall(function()
+        ENV.DuyBaoKaitun:Destroy()
+    end)
+end
+
+local Data = {
+    Version = "1.4",
+
+    Modules = {
+        AutoFarm = true,
+        AutoQuest = true,
+        AutoMastery = false,
+        AutoBoss = false,
+        AutoRaid = false,
+
+        AutoSeaProgress = true,
+        AutoCDK = true,
+        AutoSoulGuitar = true,
+        AutoGodHuman = true,
+
+        AutoCollectFruit = true,
+        AutoRandomFruit = true,
+        AutoStoreFruit = true,
+
+        AutoHopServer = true,
+        AutoRaceV4 = true
     },
 
-    ["Sword"] = {
-        "Dual-Headed Blade",
-        "Smoke Admiral",
-        "Wardens Sword",
-        "Cutlass",
-        "Katana",
-        "Dual Katana",
-        "Triple Katana",
-        "Iron Mace",
-        "Saber",
-        "Pole (1st Form)",
-        "Gravity Blade",
-        "Longsword",
-        "Rengoku",
-        "Midnight Blade",
-        "Soul Cane",
-        "Bisento",
-        "Yama",
-        "Tushita",
-        "Cursed Dual Katana"
+    Progress = {
+        OwnedWeapons = {},
+        CompletedQuests = {},
+        Sea = "Unknown",
+        LastActivity = "Initializing"
     },
 
-    ["Gun"] = {
-        "Skull Guitar",
-        "Kabucha",
-        "Venom Bow",
-        "Musket",
-        "Flintlock",
-        "Refined Slingshot",
-        "Magma Blaster",
-        "Dual Flintlock",
-        "Cannon",
-        "Bizarre Revolver",
-        "Bazooka"
-    },
-
-    ["Bypass TP"] = true,
-    ["Auto Active Race V4"] = true
+    Logs = {}
 }
 
-local Config = getgenv().Configs
-local Running = false
+ENV.DuyBaoData = Data
 
+--========================================
+-- SAVE / LOAD
+--========================================
+
+local SAVE_FILE = "DuyBaoKaitun_Data.json"
+
+local function SaveData()
+    if not (writefile and isfile) then
+        return false
+    end
+
+    local success = pcall(function()
+        writefile(
+            SAVE_FILE,
+            HttpService:JSONEncode(Data)
+        )
+    end)
+
+    return success
+end
+
+local function LoadData()
+    if not (readfile and isfile) then
+        return
+    end
+
+    local success, result = pcall(function()
+        if isfile(SAVE_FILE) then
+            return HttpService:JSONDecode(
+                readfile(SAVE_FILE)
+            )
+        end
+    end)
+
+    if success and type(result) == "table" then
+        for name, value in pairs(result.Modules or {}) do
+            if Data.Modules[name] ~= nil then
+                Data.Modules[name] = value
+            end
+        end
+
+        Data.Progress = result.Progress or Data.Progress
+        Data.Logs = result.Logs or {}
+    end
+end
+
+LoadData()
+
+--========================================
+-- PLAYER INFORMATION
+--========================================
+
+local function GetLevel()
+    local data = Player:FindFirstChild("Data")
+    local level = data and data:FindFirstChild("Level")
+
+    return level and level.Value or 0
+end
+
+local function GetSea()
+    local place = game.PlaceId
+
+    if place == 2753915549 then
+        return "Sea 1"
+    elseif place == 4442272183 then
+        return "Sea 2"
+    elseif place == 7449423635 then
+        return "Sea 3"
+    end
+
+    return "Unknown"
+end
+
+local function HasItem(name)
+    local backpack = Player:FindFirstChild("Backpack")
+    local character = Player.Character
+
+    return (
+        (backpack and backpack:FindFirstChild(name))
+        or
+        (character and character:FindFirstChild(name))
+    ) ~= nil
+end
+
+--========================================
+-- LOG SYSTEM
+--========================================
+
+local function AddLog(message)
+    table.insert(
+        Data.Logs,
+        1,
+        os.date("%H:%M:%S") .. " | " .. message
+    )
+
+    while #Data.Logs > 50 do
+        table.remove(Data.Logs)
+    end
+
+    SaveData()
+end
+
+--========================================
+-- MODULE MANAGER
+--========================================
+
+local ModuleStatus = {}
+
+local function RegisterModule(name, callback)
+    ModuleStatus[name] = {
+        Enabled = Data.Modules[name] == true,
+        Callback = callback,
+        Status = "Waiting"
+    }
+end
+
+local function SetModule(name, enabled)
+    if not ModuleStatus[name] then
+        return
+    end
+
+    Data.Modules[name] = enabled
+    ModuleStatus[name].Enabled = enabled
+
+    ModuleStatus[name].Status =
+        enabled and "Enabled - awaiting module"
+        or "Disabled"
+
+    AddLog(name .. (enabled and " enabled" or " disabled"))
+end
+
+-- Module placeholders: actual game automation is not connected.
+for name in pairs(Data.Modules) do
+    RegisterModule(name, function()
+        return false, "Automation module not implemented"
+    end)
+end
+
+--========================================
 -- GUI
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "DuyBaoKaitun"
-ScreenGui.ResetOnSpawn = false
+--========================================
 
-pcall(function()
-    ScreenGui.Parent = game:GetService("CoreGui")
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "DuyBaoKaitun"
+Gui.ResetOnSpawn = false
+
+local parentOK = pcall(function()
+    Gui.Parent = game:GetService("CoreGui")
 end)
 
-if not ScreenGui.Parent then
-    ScreenGui.Parent = Player:WaitForChild("PlayerGui")
+if not parentOK or not Gui.Parent then
+    Gui.Parent = Player:WaitForChild("PlayerGui")
 end
+
+ENV.DuyBaoKaitun = Gui
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 420, 0, 300)
-Main.Position = UDim2.new(0.5, -210, 0.5, -150)
-Main.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+Main.Size = UDim2.fromOffset(650, 440)
+Main.Position = UDim2.new(0.5, -325, 0.5, -220)
+Main.BackgroundColor3 = Color3.fromRGB(20, 21, 30)
 Main.BorderSizePixel = 0
-Main.Parent = ScreenGui
+Main.Parent = Gui
 
-local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 10)
-Corner.Parent = Main
+Instance.new("UICorner", Main).CornerRadius =
+    UDim.new(0, 12)
 
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 45)
-Title.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
-Title.Text = "DUYBAO KAITUN | v1.1"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 18
-Title.Font = Enum.Font.GothamBold
-Title.Parent = Main
+local Header = Instance.new("TextLabel")
+Header.Size = UDim2.new(1, 0, 0, 45)
+Header.BackgroundColor3 = Color3.fromRGB(35, 37, 52)
+Header.Text = "DUYBAO KAITUN v1.4"
+Header.TextColor3 = Color3.new(1, 1, 1)
+Header.Font = Enum.Font.GothamBold
+Header.TextSize = 18
+Header.Parent = Main
 
-local Status = Instance.new("TextLabel")
-Status.Position = UDim2.new(0, 15, 0, 65)
-Status.Size = UDim2.new(1, -30, 0, 35)
-Status.BackgroundTransparency = 1
-Status.Text = "Status: Ready"
-Status.TextColor3 = Color3.fromRGB(100, 255, 130)
-Status.TextSize = 14
-Status.Font = Enum.Font.Gotham
-Status.Parent = Main
+local Sidebar = Instance.new("Frame")
+Sidebar.Position = UDim2.fromOffset(10, 55)
+Sidebar.Size = UDim2.fromOffset(145, 375)
+Sidebar.BackgroundColor3 = Color3.fromRGB(27, 28, 40)
+Sidebar.Parent = Main
 
-local function CreateButton(name, position, callback)
-    local Button = Instance.new("TextButton")
-    Button.Size = UDim2.new(0, 180, 0, 38)
-    Button.Position = position
-    Button.BackgroundColor3 = Color3.fromRGB(48, 48, 65)
-    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Button.TextSize = 13
-    Button.Font = Enum.Font.GothamBold
-    Button.Text = name
-    Button.Parent = Main
+local Content = Instance.new("ScrollingFrame")
+Content.Position = UDim2.fromOffset(165, 55)
+Content.Size = UDim2.fromOffset(475, 375)
+Content.BackgroundColor3 = Color3.fromRGB(27, 28, 40)
+Content.ScrollBarThickness = 4
+Content.CanvasSize = UDim2.new(0, 0, 0, 0)
+Content.Parent = Main
 
-    local ButtonCorner = Instance.new("UICorner")
-    ButtonCorner.CornerRadius = UDim.new(0, 7)
-    ButtonCorner.Parent = Button
+local Layout = Instance.new("UIListLayout")
+Layout.Padding = UDim.new(0, 6)
+Layout.Parent = Content
 
-    Button.MouseButton1Click:Connect(callback)
-    return Button
+local Padding = Instance.new("UIPadding")
+Padding.PaddingTop = UDim.new(0, 10)
+Padding.PaddingLeft = UDim.new(0, 10)
+Padding.PaddingRight = UDim.new(0, 10)
+Padding.Parent = Content
+
+Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Content.CanvasSize = UDim2.new(
+        0, 0, 0, Layout.AbsoluteContentSize.Y + 20
+    )
+end)
+
+local function Clear()
+    for _, item in ipairs(Content:GetChildren()) do
+        if item:IsA("GuiObject")
+            and item ~= Layout
+            and item ~= Padding then
+            item:Destroy()
+        end
+    end
 end
 
-CreateButton("START KAITUN", UDim2.new(0, 20, 0, 120), function()
-    Running = true
-    Status.Text = "Status: Running"
+local function AddLabel(text, color)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -5, 0, 30)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color or Color3.new(1, 1, 1)
+    label.TextSize = 13
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = Content
+    return label
+end
+
+local function AddToggle(name)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -5, 0, 35)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextSize = 13
+    button.Font = Enum.Font.Gotham
+    button.Parent = Content
+
+    local function Refresh()
+        local enabled = Data.Modules[name]
+
+        button.Text = name .. " : " ..
+            (enabled and "ON" or "OFF")
+
+        button.BackgroundColor3 = enabled
+            and Color3.fromRGB(35, 105, 75)
+            or Color3.fromRGB(55, 55, 68)
+    end
+
+    Refresh()
+
+    button.Activated:Connect(function()
+        SetModule(name, not Data.Modules[name])
+        Refresh()
+    end)
+end
+
+local function ShowDashboard()
+    Clear()
+
+    AddLabel("LIVE DASHBOARD",
+        Color3.fromRGB(100, 190, 255))
+
+    AddLabel("Sea: " .. GetSea())
+    AddLabel("Level: " .. GetLevel())
+    AddLabel("Last activity: " ..
+        Data.Progress.LastActivity)
+
+    AddLabel("WEAPON COLLECTION",
+        Color3.fromRGB(100, 190, 255))
+
+    local important = {
+        "Yama",
+        "Tushita",
+        "Cursed Dual Katana",
+        "Skull Guitar",
+        "God Human"
+    }
+
+    for _, name in ipairs(important) do
+        AddLabel(
+            (HasItem(name) and "[OWNED] " or "[NOT DETECTED] ")
+            .. name
+        )
+    end
+
+    AddLabel("MODULE STATUS",
+        Color3.fromRGB(100, 190, 255))
+
+    for name, module in pairs(ModuleStatus) do
+        AddLabel(name .. " : " .. module.Status)
+    end
+end
+
+local function ShowModules(category)
+    Clear()
+
+    AddLabel(category,
+        Color3.fromRGB(100, 190, 255))
+
+    local groups = {
+        Farm = {
+            "AutoFarm",
+            "AutoQuest",
+            "AutoMastery",
+            "AutoBoss",
+            "AutoRaid"
+        },
+
+        Progress = {
+            "AutoSeaProgress",
+            "AutoCDK",
+            "AutoSoulGuitar",
+            "AutoGodHuman"
+        },
+
+        Fruits = {
+            "AutoCollectFruit",
+            "AutoRandomFruit",
+            "AutoStoreFruit"
+        },
+
+        Server = {
+            "AutoHopServer",
+            "AutoRaceV4"
+        }
+    }
+
+    for _, name in ipairs(groups[category] or {}) do
+        AddToggle(name)
+    end
+end
+
+local function ShowLogs()
+    Clear()
+
+    AddLabel("ACTIVITY LOG",
+        Color3.fromRGB(100, 190, 255))
+
+    if #Data.Logs == 0 then
+        AddLabel("No activity recorded.")
+    end
+
+    for _, log in ipairs(Data.Logs) do
+        AddLabel(log)
+    end
+end
+
+--========================================
+-- NAVIGATION
+--========================================
+
+local Tabs = {
+    {"Dashboard", ShowDashboard},
+    {"Farm", function()
+        ShowModules("Farm")
+    end},
+    {"Progress", function()
+        ShowModules("Progress")
+    end},
+    {"Fruits", function()
+        ShowModules("Fruits")
+    end},
+    {"Server", function()
+        ShowModules("Server")
+    end},
+    {"Activity Log", ShowLogs}
+}
+
+for index, tab in ipairs(Tabs) do
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -12, 0, 38)
+    button.Position = UDim2.fromOffset(
+        6, 8 + (index - 1) * 45
+    )
+    button.BackgroundColor3 = Color3.fromRGB(45, 47, 65)
+    button.Text = tab[1]
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextSize = 12
+    button.Font = Enum.Font.GothamBold
+    button.Parent = Sidebar
+
+    button.Activated:Connect(tab[2])
+end
+
+-- Hide / Show
+local Hide = Instance.new("TextButton")
+Hide.Size = UDim2.fromOffset(35, 35)
+Hide.Position = UDim2.new(1, -42, 0, 5)
+Hide.BackgroundColor3 = Color3.fromRGB(65, 65, 85)
+Hide.Text = "–"
+Hide.TextColor3 = Color3.new(1, 1, 1)
+Hide.TextSize = 20
+Hide.Parent = Main
+
+Hide.Activated:Connect(function()
+    local hidden = Sidebar.Visible
+    Sidebar.Visible = not hidden
+    Content.Visible = not hidden
+    Main.Size = hidden
+        and UDim2.fromOffset(180, 45)
+        or UDim2.fromOffset(650, 440)
 end)
 
-CreateButton("STOP KAITUN", UDim2.new(0, 220, 0, 120), function()
-    Running = false
-    Status.Text = "Status: Stopped"
-end)
+--========================================
+-- AUTO REFRESH
+--========================================
 
-CreateButton("QUEST CONFIG", UDim2.new(0, 20, 0, 175), function()
-    for name, enabled in pairs(Config.Quest) do
-        print(name, enabled)
+AddLog("DuyBao Kaitun v1.4 loaded")
+
+task.spawn(function()
+    while Gui.Parent do
+        Data.Progress.Sea = GetSea()
+
+        if Content.Visible then
+            -- Refresh only the dashboard data periodically.
+            -- Do not replace the current settings tab.
+        end
+
+        SaveData()
+        task.wait(10)
     end
 end)
 
-CreateButton("ITEM CONFIG", UDim2.new(0, 220, 0, 175), function()
-    print("Swords:", #Config.Sword)
-    print("Guns:", #Config.Gun)
-end)
+ShowDashboard()
 
-CreateButton("CLOSE GUI", UDim2.new(0, 120, 0, 230), function()
-    Running = false
-    ScreenGui:Destroy()
-end)
-
-print("DuyBao Kaitun v1.1 loaded!")
+print("DuyBao Kaitun v1.4 loaded!")
