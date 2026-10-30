@@ -1,0 +1,104 @@
+
+-- Blox Fruits Auto Progress
+-- Main.lua
+-- GUI Framework
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local Config = {
+    AutoSea = false,
+    AutoCDK = false,
+    AutoSoulGuitar = false,
+    AutoGodHuman = false,
+    AutoHop = false,
+    AutoCollectFruit = false,
+    AutoRandomFruit = false,
+    AutoStoreFruit = false
+}
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "BloxFruitsAuto"
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.fromOffset(300, 430)
+frame.Position = UDim2.new(0.5, -150, 0.5, -215)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+frame.Parent = gui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 45)
+title.Text = "BLOX FRUITS AUTO"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+title.Parent = frame
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -20, 0, 30)
+status.Position = UDim2.fromOffset(10, 55)
+status.Text = "Status: STOPPED"
+status.TextColor3 = Color3.new(1, 1, 1)
+status.BackgroundTransparency = 1
+status.Parent = frame
+
+local running = false
+local y = 95
+
+local function createToggle(name, key)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -20, 0, 32)
+    button.Position = UDim2.fromOffset(10, y)
+    button.BackgroundColor3 = Color3.fromRGB(55, 55, 75)
+    button.TextColor3 = Color3.new(1, 1, 1)
+
+    local function update()
+        button.Text = name .. ": " ..
+            (Config[key] and "ON" or "OFF")
+    end
+
+    update()
+
+    button.MouseButton1Click:Connect(function()
+        Config[key] = not Config[key]
+        update()
+    end)
+
+    button.Parent = frame
+    y = y + 37
+end
+
+createToggle("Auto Sea 1-3", "AutoSea")
+createToggle("Auto CDK", "AutoCDK")
+createToggle("Auto Soul Guitar", "AutoSoulGuitar")
+createToggle("Auto God Human", "AutoGodHuman")
+createToggle("Auto Hop", "AutoHop")
+createToggle("Auto Collect Fruit", "AutoCollectFruit")
+createToggle("Auto Random Fruit", "AutoRandomFruit")
+createToggle("Auto Store Fruit", "AutoStoreFruit")
+
+local start = Instance.new("TextButton")
+start.Size = UDim2.new(0.45, 0, 0, 35)
+start.Position = UDim2.new(0.03, 0, 1, -42)
+start.Text = "START ALL"
+start.Parent = frame
+
+local stop = Instance.new("TextButton")
+stop.Size = UDim2.new(0.45, 0, 0, 35)
+stop.Position = UDim2.new(0.52, 0, 1, -42)
+stop.Text = "STOP ALL"
+stop.Parent = frame
+
+start.MouseButton1Click:Connect(function()
+    running = true
+    status.Text = "Status: RUNNING"
+end)
+
+stop.MouseButton1Click:Connect(function()
+    running = false
+    status.Text = "Status: STOPPED"
+end)
+
+gui.Parent = player:WaitForChild("PlayerGui")
+
+print("Blox Fruits Auto GUI Loaded!")
